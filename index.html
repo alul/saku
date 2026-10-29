@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#147d54">
+  <title>FinSaku — Catatan Keuangan</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="FinSaku beranda">
+        <span class="brand-mark">F</span><span>Fin<span class="brand-light">Saku</span></span>
+      </a>
+      <div class="side-label">MENU UTAMA</div>
+      <button class="nav-item active" data-view="dashboard"><span>▦</span> Ringkasan</button>
+      <button class="nav-item" data-view="transactions"><span>⇄</span> Transaksi</button>
+      <button class="nav-item" data-view="add"><span>＋</span> Tambah transaksi</button>
+      <div class="side-label side-label-spaced">LAINNYA</div>
+      <button class="nav-item" data-view="tools"><span>✧</span> Input pintar</button>
+      <div class="sidebar-bottom">
+        <div class="side-tip"><div class="tip-icon">✦</div><strong>Keuangan lebih rapi</strong><p>Catat pemasukan dan pengeluaranmu setiap hari.</p></div>
+        <div class="connection"><span id="connection-dot"></span><span id="connection-text">Belum terhubung ke Sheets</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><div class="eyebrow" id="today-label">KEUANGAN PRIBADI</div><h1 id="page-title">Ringkasan</h1></div>
+        <div class="top-actions"><span class="date-chip" id="date-chip">Hari ini</span><button class="primary-btn" data-goto="add">＋ Transaksi baru</button></div>
+      </header>
+
+      <section class="view active" id="view-dashboard">
+        <div class="welcome-row"><div><h2>Halo, selamat datang! <span class="wave">✦</span></h2><p>Pantau keuanganmu dengan lebih mudah.</p></div><div class="month-select"><span>Periode</span><select id="period-select"><option value="all">Semua waktu</option><option value="month">Bulan ini</option></select></div></div>
+        <div class="summary-grid">
+          <article class="summary-card balance-card"><div class="summary-top"><span>Total saldo tercatat</span><span class="card-icon">◈</span></div><div class="summary-value" id="total-balance">Rp0</div><div class="summary-foot"><span class="status-pill">●</span> Berdasarkan transaksi tersimpan</div><div class="balance-orb orb-one"></div><div class="balance-orb orb-two"></div></article>
+          <article class="summary-card"><div class="summary-top"><span>Total pemasukan</span><span class="card-icon income-icon">↙</span></div><div class="summary-value" id="total-income">Rp0</div><div class="summary-foot muted">Semua pemasukan tercatat</div></article>
+          <article class="summary-card"><div class="summary-top"><span>Total pengeluaran</span><span class="card-icon expense-icon">↗</span></div><div class="summary-value" id="total-expense">Rp0</div><div class="summary-foot muted">Semua pengeluaran tercatat</div></article>
+        </div>
+        <div class="content-grid">
+          <article class="panel cashflow-panel"><div class="panel-heading"><div><h3>Arus kas bulanan</h3><p>Perbandingan pemasukan dan pengeluaran</p></div><div class="legend"><span><i class="legend-in"></i> Masuk</span><span><i class="legend-out"></i> Keluar</span></div></div><div class="chart-wrap" id="cashflow-chart"><div class="empty-chart">Tambahkan transaksi untuk melihat arus kas.</div></div></article>
+          <article class="panel quick-panel"><div class="panel-heading"><div><h3>Aksi cepat</h3><p>Pilih cara mencatat transaksi</p></div></div><button class="quick-action" data-goto="add"><span class="quick-icon green">＋</span><span><b>Tambah transaksi</b><small>Isi pemasukan atau pengeluaran</small></span><span class="quick-arrow">›</span></button><button class="quick-action" data-goto="tools"><span class="quick-icon purple">▧</span><span><b>Pindai struk</b><small>Ambil detail dari foto struk</small></span><span class="quick-arrow">›</span></button><button class="quick-action" data-goto="tools"><span class="quick-icon orange">◖</span><span><b>Catatan suara</b><small>Ucapkan transaksi untuk dicatat</small></span><span class="quick-arrow">›</span></button></article>
+        </div>
+        <article class="panel recent-panel"><div class="panel-heading"><div><h3>Transaksi terbaru</h3><p>Aktivitas keuangan terakhir</p></div><button class="text-btn" data-goto="transactions">Lihat semua <span>→</span></button></div><div id="recent-list" class="transaction-list"><div class="empty-state">Belum ada transaksi. Mulai dengan menambahkan transaksi pertamamu.</div></div></article>
+      </section>
+
+      <section class="view" id="view-transactions">
+        <div class="section-intro"><div><h2>Semua transaksi</h2><p>Riwayat yang tersimpan di Google Sheets.</p></div><button class="primary-btn" data-goto="add">＋ Tambah transaksi</button></div>
+        <div class="panel filter-panel"><div class="search-box"><span>⌕</span><input id="search-input" placeholder="Cari keterangan atau kategori…"></div><select id="type-filter"><option value="all">Semua jenis</option><option value="Masuk">Pemasukan</option><option value="Keluar">Pengeluaran</option></select><select id="category-filter"><option value="all">Semua kategori</option></select><button class="secondary-btn" id="refresh-btn">↻ Muat ulang</button></div>
+        <article class="panel"><div class="table-wrap"><table><thead><tr><th>TRANSAKSI</th><th>TANGGAL</th><th>KATEGORI</th><th>METODE</th><th>NOMINAL</th></tr></thead><tbody id="transactions-body"><tr><td colspan="5" class="empty-state">Memuat data transaksi…</td></tr></tbody></table></div><div class="table-footer" id="transaction-count">0 transaksi</div></article>
+      </section>
+
+      <section class="view" id="view-add">
+        <div class="section-intro"><div><h2>Tambah transaksi</h2><p>Catat uang masuk atau keluar dengan cepat.</p></div></div>
+        <div class="form-layout"><article class="panel form-panel"><form id="transaction-form">
+          <div class="type-switch"><button type="button" class="type-choice selected" data-type="Keluar">− Pengeluaran</button><button type="button" class="type-choice" data-type="Masuk">＋ Pemasukan</button></div><input type="hidden" id="form-type" value="Keluar">
+          <label for="amount">Nominal transaksi <span>*</span></label><div class="amount-input"><span>Rp</span><input id="amount" type="number" min="1" step="1" placeholder="0" required></div>
+          <div class="form-two"><div><label for="date">Tanggal <span>*</span></label><input id="date" type="date" required></div><div><label for="category">Kategori <span>*</span></label><select id="category" required><option>Makanan</option><option>Transportasi</option><option>Belanja</option><option>Tagihan</option><option>Kesehatan</option><option>Gaji</option><option>Bisnis</option><option>Hiburan</option><option>Pendidikan</option><option>Lainnya</option></select></div></div>
+          <div class="form-two"><div><label for="wallet">Dompet / metode</label><select id="wallet"><option>Tunai</option><option>Transfer bank</option><option>E-wallet</option><option>Kartu debit</option><option>Lainnya</option></select></div><div><label for="description">Keterangan</label><input id="description" maxlength="300" placeholder="Contoh: makan siang"></div></div>
+          <div class="form-actions"><button class="secondary-btn" type="reset" id="reset-form">Reset</button><button class="primary-btn" type="submit" id="save-btn">Simpan transaksi <span>→</span></button></div>
+          <p class="form-note">Transaksi akan dikirim ke Google Sheets jika koneksi telah dikonfigurasi.</p>
+        </form></article><aside class="panel form-aside"><div class="aside-art">↗</div><h3>Kebiasaan kecil, dampak besar</h3><p>Mencatat transaksi membantu kamu memahami pola pengeluaran dan merencanakan keuangan dengan lebih baik.</p><div class="aside-divider"></div><div class="mini-stat"><span>Tips</span><b>Catat segera setelah transaksi</b></div></aside></div>
+      </section>
+
+      <section class="view" id="view-tools">
+        <div class="section-intro"><div><h2>Input pintar</h2><p>Gunakan foto struk atau catatan suara untuk membantu pencatatan.</p></div></div>
+        <div class="tools-grid">
+          <article class="panel tool-panel"><div class="tool-head"><span class="tool-big-icon purple">▧</span><div><h3>Pindai foto struk</h3><p>AI membaca tanggal, total, dan kategori dari struk.</p></div></div><label class="upload-area" for="receipt-file"><span class="upload-symbol">↑</span><b>Pilih foto struk</b><small>JPG, PNG, atau WebP · maksimal 3 MB</small><input id="receipt-file" type="file" accept="image/jpeg,image/png,image/webp"></label><div id="receipt-preview" class="receipt-preview"></div><button class="primary-btn full-btn" id="receipt-btn" disabled>Analisis struk</button><p class="helper-text">Periksa hasil AI sebelum digunakan sebagai catatan keuangan.</p></article>
+          <article class="panel tool-panel"><div class="tool-head"><span class="tool-big-icon orange">◖</span><div><h3>Catatan suara</h3><p>Ucapkan transaksi, lalu ubah menjadi teks untuk diproses AI.</p></div></div><div class="voice-box"><div class="mic-circle">◖</div><b id="voice-status">Siap mendengarkan</b><p id="voice-help">Tekan tombol untuk mulai berbicara dalam Bahasa Indonesia.</p><button class="secondary-btn" id="voice-start">● Mulai rekam</button></div><label for="voice-text">Teks catatan</label><textarea id="voice-text" rows="4" placeholder="Contoh: tadi beli makan siang dua puluh lima ribu rupiah"></textarea><button class="primary-btn full-btn" id="voice-btn">Proses catatan suara</button><p class="helper-text">Pengenalan suara browser mungkin tidak tersedia di semua perangkat.</p></article>
+        </div>
+      </section>
+
+      <footer class="app-footer"><span>FinSaku · Catat, pahami, rencanakan.</span><span>Data tersimpan di spreadsheet yang kamu hubungkan.</span></footer>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="busy-overlay" class="busy-overlay"><div class="spinner"></div><b id="busy-text">Memproses…</b></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
