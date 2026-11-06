@@ -188,44 +188,113 @@
   });
   $("reset-form").addEventListener("click",()=>setTimeout(()=>{$("date").value=isoToday();},0));
 
+  function parseMoneyFromText(text) {
+    const lines = String(text || "").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+    const totalKeys = /(grand\s*total|total\s*bayar|total|jumlah\s*bayar|jumlah|netto|amount\s*due|tunai|dibayar)/i;
+    const candidates = [];
+    lines.forEach((line, index) => {
+      const nums = line.match(/(?:rp\.?\s*)?\d[\d.,]{1,}/gi) || [];
+      nums.forEach(raw => {
+        const digits = raw.replace(/[^0-9]/g, "");
+        const value = Number(digits);
+        if (value > 0) candidates.push({value, score:(totalKeys.test(line)?100:0) + Math.min(digits.length,8) + index/1000});
+      });
+    });
+    candidates.sort((a,b)=>b.score-a.score);
+    return candidates[0]?.value || 0;
+  }
+  function guessCategory(text) {
+    const s=String(text||"").toLowerCase();
+    if(/makan|minum|resto|warung|cafe|kopi|bakso|ayam|mie/.test(s)) return "Makanan";
+    if(/bensin|pertalite|pertamax|parkir|tol|ojek|grab|gojek|transport/.test(s)) return "Transportasi";
+    if(/listrik|token|air|pdam|internet|wifi|pulsa|tagihan/.test(s)) return "Tagihan";
+    if(/obat|klinik|dokter|apotek|rumah sakit/.test(s)) return "Kesehatan";
+    return "Belanja";
+  }
+  function numberWordsToInt(text) {
+    const words=String(text||"").toLowerCase().replace(/rupiah|rp|per|dan/g," ").trim().split(/\s+/);
+    const n={nol:0,satu:1,se:1,dua:2,tiga:3,empat:4,lima:5, enam:6,tujuh:7,delapan:8,sembilan:9,sepuluh:10,sebelas:11};
+    let total=0, group=0, found=false;
+    for(let i=0;i<words.length;i++){
+      const w=words[i];
+      if(/^\d[\d.,]*$/.test(w)){ const v=Number(w.replace(/\./g,"").replace(/,/g,"")); if(v>0){group+=v;found=true;} continue; }
+      if(n[w]!==undefined){group+=n[w];found=true;continue;}
+      if(w==="belas"){group=(group||1)+10;found=true;continue;}
+      if(w==="puluh"){group=(group||1)*10;found=true;continue;}
+      if(w==="ratus"){group=(group||1)*100;found=true;continue;}
+      if(w==="ribu"){total+=(group||1)*1000;group=0;found=true;continue;}
+      if(w==="juta"){total+=(group||1)*1000000;group=0;found=true;continue;}
+    }
+    const value=total+group;
+    return found && value>0 ? value : 0;
+  }
+  function voicePayload(text) {
+    const s=String(text||"").toLowerCase();
+    const income=/(pemasukan|gaji|terima|menerima|dapat uang|pendapatan|jualan laku)/.test(s);
+    const amount=numberWordsToInt(s);
+    let category="Lainnya";
+    if(/makan|minum|kopi|sarapan|makan siang|makan malam/.test(s)) category="Makanan";
+    else if(/bensin|parkir|tol|ojek|gojek|grab|transport/.test(s)) category="Transportasi";
+    else if(/belanja|supermarket|minimarket|pasar/.test(s)) category="Belanja";
+    else if(/listrik|air|internet|wifi|pulsa|tagihan/.test(s)) category="Tagihan";
+    else if(/obat|dokter|klinik|apotek/.test(s)) category="Kesehatan";
+    else if(/gaji/.test(s)) category="Gaji";
+    return {tanggal:isoToday(),jenis:income?"Masuk":"Keluar",kategori:category,nominal:amount,dompet:"Tunai",keterangan:text.trim(),metode:"Catatan Suara"};
+  }
+
   $("receipt-file").addEventListener("change",e=>{
-    const file=e.target.files[0]; selectedReceipt=null; $("receipt-btn").disabled=true;
+    const file=e.target.files[0]; selectedReceipt=file||null; $("receipt-btn").disabled=!file; $("receipt-result").innerHTML="";
     if (!file) { $("receipt-preview").innerHTML=""; return; }
-    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) { toast("Gunakan foto JPG, PNG, atau WebP.",true); e.target.value=""; return; }
-    if (file.size>3*1024*1024) { toast("Ukuran foto maksimal 3 MB.",true); e.target.value=""; return; }
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) { toast("Gunakan foto JPG, PNG, atau WebP.",true); e.target.value=""; selectedReceipt=null; $("receipt-btn").disabled=true; return; }
+    if (file.size>3*1024*1024) { toast("Ukuran foto maksimal 3 MB.",true); e.target.value=""; selectedReceipt=null; $("receipt-btn").disabled=true; return; }
     const reader=new FileReader();
-    reader.onload=()=>{selectedReceipt={base64:String(reader.result).split(",")[1],mime:file.type};$("receipt-preview").innerHTML=`<img src="${reader.result}" alt="Pratinjau struk"><div>${safe(file.name)}</div>`;$("receipt-btn").disabled=false;};
+    reader.onload=()=>{$("receipt-preview").innerHTML=`<img src="${reader.result}" alt="Pratinjau struk"><div>${safe(file.name)}</div>`;};
     reader.readAsDataURL(file);
   });
   $("receipt-btn").addEventListener("click",async()=>{
     if (!selectedReceipt) return;
-    busy(true,"Membaca foto struk dengan AI…");
+    if (!window.Tesseract) return toast("Modul OCR belum termuat. Periksa koneksi internet lalu muat ulang.",true);
+    busy(true,"Membaca teks struk secara lokal…");
     try {
-      const result=await request("receipt",{image_base64:selectedReceipt.base64,mime_type:selectedReceipt.mime});
-      await loadTransactions(false); toast(`Struk tersimpan: ${money(result.data.nominal)} · ${result.data.kategori}`); go("transactions");
-      $("receipt-file").value="";$("receipt-preview").innerHTML="";selectedReceipt=null;$("receipt-btn").disabled=true;
-    } catch(err) { toast(err.message,true); }
+      const result=await Tesseract.recognize(selectedReceipt,"ind",{logger:m=>{if(m.status==="recognizing text") $("busy-text").textContent=`Membaca struk… ${Math.round((m.progress||0)*100)}%`;}});
+      const extracted=String(result.data.text||"").trim();
+      if(!extracted) throw new Error("Tulisan pada foto belum terbaca. Coba foto lebih terang, fokus, dan tidak miring.");
+      const amount=parseMoneyFromText(extracted);
+      const lines=extracted.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      const desc=(lines.find(x=>/[a-zA-Z]{3,}/.test(x))||"Transaksi dari foto struk").slice(0,100);
+      $("receipt-result").innerHTML=`<div class="panel" style="margin-top:12px;padding:14px"><b>Hasil pembacaan struk</b><label for="receipt-amount" style="display:block;margin-top:12px">Total (Rp)</label><input id="receipt-amount" type="number" min="1" value="${amount||""}" placeholder="Periksa nominal" style="width:100%;padding:10px;border:1px solid #dfe8e2;border-radius:8px;margin:6px 0 12px"><label for="receipt-desc">Keterangan</label><input id="receipt-desc" value="${safe(desc)}" style="width:100%;padding:10px;border:1px solid #dfe8e2;border-radius:8px;margin:6px 0 12px"><label for="receipt-ocr">Teks hasil OCR (boleh dikoreksi)</label><textarea id="receipt-ocr" rows="5" style="width:100%;padding:10px;border:1px solid #dfe8e2;border-radius:8px">${safe(extracted)}</textarea><button class="primary-btn full-btn" id="receipt-save" style="margin-top:10px">Simpan transaksi struk</button></div>`;
+      $("receipt-save").addEventListener("click",async()=>{
+        const nominal=Number($("receipt-amount").value);
+        if(!nominal||nominal<=0) return toast("Nominal tidak terbaca. Isi total secara manual.",true);
+        busy(true,"Menyimpan transaksi struk…");
+        try { await request("manual",{tanggal:isoToday(),jenis:"Keluar",kategori:guessCategory($("receipt-ocr").value),nominal,dompet:"Tunai",keterangan:$("receipt-desc").value||"Transaksi dari struk",metode:"Foto Struk OCR"}); await loadTransactions(false); toast(`Struk tersimpan: ${money(nominal)}`); go("transactions"); $("receipt-file").value="";$("receipt-preview").innerHTML="";$("receipt-result").innerHTML="";selectedReceipt=null;$("receipt-btn").disabled=true; }
+        catch(err){toast(err.message,true);} finally{busy(false);}
+      });
+      toast("Teks struk berhasil dibaca. Periksa nominal sebelum menyimpan.");
+    } catch(err) { toast(err.message||String(err),true); }
     finally { busy(false); }
   });
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   $("voice-start").addEventListener("click",()=>{
-    if (!SpeechRecognition) { toast("Pengenalan suara tidak tersedia di browser ini. Ketik catatan secara manual.",true); return; }
+    if (!SpeechRecognition) { toast("Browser ini tidak mendukung pengenalan suara. Gunakan Chrome atau ketik catatan manual.",true); return; }
     if (recognition) { recognition.stop(); recognition=null; return; }
     recognition=new SpeechRecognition(); recognition.lang="id-ID"; recognition.interimResults=true; recognition.continuous=false;
-    $("voice-status").textContent="Mendengarkan…"; $("voice-help").textContent="Ucapkan transaksi dengan jelas.";
+    $("voice-status").textContent="Mendengarkan…"; $("voice-help").textContent="Ucapkan transaksi, misalnya: beli makan dua puluh lima ribu rupiah.";
     $("voice-start").textContent="■ Berhenti";
-    recognition.onresult=e=>{let text="";for(let i=e.resultIndex;i<e.results.length;i++)text+=e.results[i][0].transcript;$("voice-text").value=text;};
+    recognition.onresult=e=>{let text="";for(let i=0;i<e.results.length;i++)text+=e.results[i][0].transcript;$("voice-text").value=text;};
     recognition.onerror=e=>{toast("Pengenalan suara: "+e.error,true);};
-    recognition.onend=()=>{recognition=null;$("voice-status").textContent="Selesai mendengarkan";$("voice-help").textContent="Periksa teks sebelum diproses.";$("voice-start").textContent="● Mulai rekam";};
-    recognition.start();
+    recognition.onend=()=>{recognition=null;$("voice-status").textContent="Selesai mendengarkan";$("voice-help").textContent="Periksa teks dan nominal sebelum disimpan.";$("voice-start").textContent="● Mulai rekam";};
+    try { recognition.start(); } catch(e) { toast("Tidak dapat memulai mikrofon. Periksa izin mikrofon dan gunakan HTTPS.",true); }
   });
   $("voice-btn").addEventListener("click",async()=>{
     const text=$("voice-text").value.trim(); if(!text)return toast("Isi atau rekam catatan suara terlebih dahulu.",true);
-    busy(true,"Mengubah catatan menjadi transaksi…");
+    const payload=voicePayload(text);
+    if(!payload.nominal) return toast("Nominal belum terbaca. Ucapkan angka dengan jelas atau tulis nominal angka, misalnya 25000.",true);
+    busy(true,"Menyimpan catatan suara…");
     try {
-      const result=await request("voice",{text});
-      await loadTransactions(false); toast(`Transaksi tersimpan: ${money(result.data.nominal)} · ${result.data.kategori}`); go("transactions");
+      await request("manual",payload);
+      await loadTransactions(false); toast(`Transaksi tersimpan: ${money(payload.nominal)} · ${payload.kategori}`); go("transactions");
       $("voice-text").value="";
     } catch(err) { toast(err.message,true); }
     finally { busy(false); }
